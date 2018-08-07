@@ -1,0 +1,4 @@
+build
+nbproject
+cmake
+*.sw*
