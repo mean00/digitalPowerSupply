@@ -8,14 +8,15 @@
 #include "SPI.h"
 #include "ILI9341_extended.h"
 
-#include "Fonts/FreeSans24pt7b.h"
+//#include "Fonts/FreeSans24pt7b.h"
+#include "Fonts/digitLcd56.h"
 #include "Fonts/FreeSans18pt7b.h"
 #include "Fonts/FreeSans9pt7b.h"
 
 // ILI9341 is using HW SPI + those pins
-#define TFT_DC          PB0
-#define TFT_RST         PB1
-#define TFT_CS          PB10
+#define TFT_DC          PA8 // OK
+#define TFT_RST         PA9 // OK
+#define TFT_CS          PA10 // PB10
 
 // Our globals
 ILI9341              *tft=NULL;
@@ -39,8 +40,8 @@ void initTft()
     tft->begin();  
     tft->fillScreen(ILI9341_BLACK);
     tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
-    tft->setRotation(3);
-    tft->setFontFamily(&FreeSans9pt7b,&FreeSans18pt7b,&FreeSans24pt7b);
+    tft->setRotation(1); //3
+    tft->setFontFamily(&FreeSans9pt7b,&FreeSans18pt7b,&DIGIT_LCD56pt7b); //FreeSans24pt7b);
     tft->setFontSize(ILI9341::MediumFont);
     tft->fillScreen(ILI9341_RED);
 }
@@ -74,7 +75,7 @@ const char *text2[6]={
     "Z",
     "aa",
     "ZZZ",
-    "aaaaa",
+    "9.20 V",
     "ZZZZZZZ"
 };
 void myLoop(void) 
@@ -84,7 +85,7 @@ void myLoop(void)
     if(draw)
     {
 #if 0
-        tft->setFontSize(ILI9341::SmallFont);
+        tft->setFontSize(ILI9341::LargeFont);
         for(int i=0;i<5;i++)
         {
             int y=(i+offset)%5;        
@@ -92,7 +93,7 @@ void myLoop(void)
             tft->myDrawString(text[y]);
         }
 #else
-        tft->setFontSize(ILI9341::MediumFont);
+        tft->setFontSize(ILI9341::BigFont);
          tft->setCursor(2, 38);   
          int y=offset%5;
           tft->myDrawString(text2[y],100);
