@@ -7,7 +7,7 @@
 #include <Wire.h>
 #include "SPI.h"
 #include "ILI9341_extended.h"
-
+#include "adc.h"
 //#include "Fonts/FreeSans24pt7b.h"
 #include "Fonts/digitLcd56.h"
 #include "Fonts/FreeSans18pt7b.h"
@@ -17,9 +17,10 @@
 #define TFT_DC          PA8 // OK
 #define TFT_RST         PA9 // OK
 #define TFT_CS          PA10 // PB10
-
+#define PIN_ADC_VOLTAGE PB0
 // Our globals
 ILI9341              *tft=NULL;
+float cal;
 /*
  */
 
@@ -46,6 +47,12 @@ void initTft()
     tft->fillScreen(ILI9341_RED);
 }
 
+void setup_vcc_sensor() {
+    adc_reg_map *regs = ADC1->regs;
+    regs->CR2 |= ADC_CR2_TSVREFE;    // enable VREFINT and temp sensor
+    regs->SMPR1 =  ADC_SMPR1_SMP17;  // sample rate for VREFINT ADC channel
+}
+
 void mySetup() 
 {
   Serial.println("Init"); 
@@ -59,6 +66,13 @@ void mySetup()
   
   Serial.println("TFT"); 
   initTft();   
+  // Init PB0 as ADC in
+  
+    pinMode(PIN_ADC_VOLTAGE,INPUT_ANALOG);
+    setup_vcc_sensor();
+    
+    cal = 1.  / (float)adc_read( ADC1, 17);
+    cal=1200.*4.096*cal;
 
 }
 
@@ -78,29 +92,30 @@ const char *text2[6]={
     "9.20 V",
     "ZZZZZZZ"
 };
+
+
 void myLoop(void) 
 {
-    static bool draw=true;
-    static int offset=3;
-    if(draw)
+
+    char buffer[20];
+    float  millivolts ;
+   
+    
+#define NB 8
+    float     sum=0,v;
+    for(int i=0;i<NB;i++)
     {
-#if 0
-        tft->setFontSize(ILI9341::LargeFont);
-        for(int i=0;i<5;i++)
-        {
-            int y=(i+offset)%5;        
-            tft->setCursor(2, 38+20*i);       
-            tft->myDrawString(text[y]);
-        }
-#else
-        tft->setFontSize(ILI9341::BigFont);
-         tft->setCursor(2, 38);   
-         int y=offset%5;
-          tft->myDrawString(text2[y],100);
-#endif        
-        offset++;        
-        draw=false;        
+        v = (float)analogRead(PIN_ADC_VOLTAGE);
+     
+        sum+=v;
     }
+    v=sum/NB;
+    v=floor(((v*cal)/4096.)*1000.);
+    v=(v)/1000.;
+    sprintf(buffer,"%02.3f",v);
+    tft->setFontSize(ILI9341::BigFont);
+    tft->setCursor(2, 120);  
+    tft->myDrawString(buffer,300);
 
 }
 //-
