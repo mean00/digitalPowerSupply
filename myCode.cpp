@@ -15,6 +15,7 @@
 #include "Fonts/FreeSans9pt7b.h"
 #include "myMCP4725.h"
 #include "SoftWire.h"
+#include "Wire.h"
 
 
 // ILI9341 is using HW SPI + those pins
@@ -35,7 +36,7 @@ adc_dev *voltageADCDevice;
 int     voltageADCChannel;
 myMCP4725 *dacVoltage;
 
-WireBase *VoltageDAC;
+WireBase *DAC_I2C;
 
 /*
  */
@@ -87,15 +88,25 @@ void mySetup()
   Serial.println("TFT"); 
   initTft();   
   
-  VoltageDAC=new SoftWire(PB8/* SCL */,PB9 /* SDA*/);
-  VoltageDAC->begin();
+#if 1  
+  DAC_I2C=new SoftWire(PB8/* SCL */,PB9 /* SDA*/);
+  DAC_I2C->begin();
+#else
+  pinMode(PB8,OUTPUT);
+  pinMode(PB9,OUTPUT);
+  TwoWire *tw=new TwoWire(1);
+  tw->setClock(100000);
+  tw->begin();
+  DAC_I2C=tw;
+#endif  
+  
   
   potAdc=new myAdc(PIN_POT_VOLTAGE,1.);
   voltageAdc=new myAdc(PIN_VOLTOUT_VOLTAGE,11.);
   
    
   
-  dacVoltage=new myMCP4725(*VoltageDAC,VOLTAGE_ADC_I2C_ADR);
+  dacVoltage=new myMCP4725(*DAC_I2C,VOLTAGE_ADC_I2C_ADR);
   
 }
 /**
