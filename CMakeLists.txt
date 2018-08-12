@@ -44,7 +44,7 @@ include_directories(${ILI})
 #ADD_DEFINITIONS("-ffunction-sections -fdata-sections ")
 generate_arduino_firmware(BatteryTester2 
                 SKETCH i2cPowerSupply.ino
-                SRCS   ${ILI}/ILI9341_extended.cpp ${ILI}/ILI9341_extended_glyph.cpp myCode.cpp
+                SRCS   ${ILI}/ILI9341_extended.cpp ${ILI}/ILI9341_extended_glyph.cpp myCode.cpp myAdc.cpp myMCP4725.cpp
 
                 PORT ${ARDUINO_DEFAULT_PORT}
                 BOARD_CPU ${ARDUINO_CPU}

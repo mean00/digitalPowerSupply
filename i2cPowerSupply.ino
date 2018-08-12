@@ -17,7 +17,7 @@
 #include <Wire.h>
 #include "Adafruit_GFX_AS.h" //
 #include "Adafruit_ILI9341_STM.h" //
-#include <Adafruit_MCP4725.h>
+#include "myMCP4725.h"
 #include "ILI9341_extended.h"
 
 extern void mySetup();
