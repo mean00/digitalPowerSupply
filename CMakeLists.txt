@@ -42,7 +42,7 @@ SET(ILI ${CMAKE_CURRENT_SOURCE_DIR}/extendedIli9341)
 include_directories(${ILI})
 # This reduces size by 10% or so
 #ADD_DEFINITIONS("-ffunction-sections -fdata-sections ")
-generate_arduino_firmware(BatteryTester2 
+generate_arduino_firmware(I2cPower 
                 SKETCH i2cPowerSupply.ino
                 SRCS   ${ILI}/ILI9341_extended.cpp ${ILI}/ILI9341_extended_glyph.cpp myCode.cpp myAdc.cpp myMCP4725.cpp
 
