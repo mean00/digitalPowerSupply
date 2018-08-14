@@ -88,14 +88,11 @@ void mySetup()
   Serial.println("TFT"); 
   initTft();   
   
-#if 1  
-  DAC_I2C=new SoftWire(PB8/* SCL */,PB9 /* SDA*/);
+#if 0
+  DAC_I2C=new SoftWire(PB6/* SCL */,PB7 /* SDA*/);
   DAC_I2C->begin();
-#else
-  pinMode(PB8,OUTPUT);
-  pinMode(PB9,OUTPUT);
+#else 
   TwoWire *tw=new TwoWire(1);
-  tw->setClock(100000);
   tw->begin();
   DAC_I2C=tw;
 #endif  
@@ -114,11 +111,18 @@ void mySetup()
 
 void myLoop(void) 
 {
-
+    static int lastConsign=0;
+    
     char buffer[20];
     
     int consign=potAdc->getRawValue();
-    dacVoltage->setVoltage(consign);
+    consign=(consign+10)/20;
+    consign*=20;
+    if(abs(consign-lastConsign)>20)
+    {
+        lastConsign=consign;
+        dacVoltage->setVoltage(consign);
+    }
     float v;
 
 #if 0    
