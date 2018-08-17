@@ -88,7 +88,7 @@ void mySetup()
   Serial.println("TFT"); 
   initTft();   
   
-#if 0
+#if 1
   DAC_I2C=new SoftWire(PB6/* SCL */,PB7 /* SDA*/);
   DAC_I2C->begin();
 #else 
@@ -99,32 +99,37 @@ void mySetup()
   
   
   potAdc=new myAdc(PIN_POT_VOLTAGE,1.);
-  voltageAdc=new myAdc(PIN_VOLTOUT_VOLTAGE,11.);
+ // voltageAdc=new myAdc(PIN_VOLTOUT_VOLTAGE,11.);
   
    
   
   dacVoltage=new myMCP4725(*DAC_I2C,VOLTAGE_ADC_I2C_ADR);
-  
+  dacVoltage->setVoltage(500);  // 5v
 }
 /**
  */
 
 void myLoop(void) 
 {
-    static int lastConsign=0;
+#if 1
+    static int lastConsign=-1;
     
     char buffer[20];
     
     int consign=potAdc->getRawValue();
     consign=(consign+10)/20;
     consign*=20;
-    if(abs(consign-lastConsign)>20)
+    if(abs(consign-lastConsign)>20 || lastConsign==-1)
     {
         lastConsign=consign;
         dacVoltage->setVoltage(consign);
+        sprintf(buffer,"%03d",consign);
+        tft->setFontSize(ILI9341::BigFont);
+        tft->setCursor(20, 20);  
+        tft->myDrawString(buffer,280);
     }
     float v;
-
+#endif
 #if 0    
     v=potAdc->getValue();
     sprintf(buffer,"%02.3f",v);
@@ -132,23 +137,20 @@ void myLoop(void)
     tft->setCursor(20, 20);  
     tft->myDrawString(buffer,280);
 #else
-    sprintf(buffer,"%03d",consign);
-    tft->setFontSize(ILI9341::BigFont);
-    tft->setCursor(20, 20);  
-    tft->myDrawString(buffer,280);
+   
     
 #endif
     
   
     
-    
+#if 0    
     v=voltageAdc->getValue();
     sprintf(buffer,"%02.3f",v);
     tft->setFontSize(ILI9341::BigFont);
     tft->setCursor(20, 120+20);  
     tft->myDrawString(buffer,280);
     
-    
+#endif   
     
     delay(100);
 
