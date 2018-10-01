@@ -20,6 +20,7 @@ ADD_DEFINITIONS("-O0 -g2")
 set(ARDUINO_DEFAULT_BOARD genericSTM32F103C)        # Default Board ID, when not specified
 set(ARDUINO_DEFAULT_PORT ttyACM0) # Default Port, when not specified
 set(ARDUINO_CPU          STM32F103C8)
+SET(ARDUINO_UPLOAD_METHOD DFUUpload)
 
 # this is needed for the nano, it should be set automatically, maybe something changed with sdk 1.8.x ?
 set(ARDUINO_CPUMENU .menu.cpu.${ARDUINO_CPU})
@@ -40,6 +41,14 @@ SET(libPrefix ${ARDUINO_DEFAULT_BOARD}_)
 SET(ILI ${CMAKE_CURRENT_SOURCE_DIR}/extendedIli9341)
 
 include_directories(${ILI})
+
+
+#generate_arduino_library( simpler_INA219
+                        #SRCS  simpler_INA219/simpler_INA219.cpp
+                        #BOARD ${ARDUINO_DEFAULT_BOARD})
+
+#INCLUDE_DIRECTORIES(simpler_INA219)
+
 # This reduces size by 10% or so
 #ADD_DEFINITIONS("-ffunction-sections -fdata-sections ")
 generate_arduino_firmware(I2cPower 
@@ -48,6 +57,7 @@ generate_arduino_firmware(I2cPower
 
                 PORT ${ARDUINO_DEFAULT_PORT}
                 BOARD_CPU ${ARDUINO_CPU}
+#                LIBS simpler_INA219
                 )
 
 # EOF
