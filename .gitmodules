@@ -3,4 +3,4 @@
 	url = git@github.com:mean00/ILI9341_extended.git
 [submodule "simplerMCP4725"]
 	path = simplerMCP4725
-	url = git@github.com:mean00/simpler4725.git 
+	url = git@github.com:mean00/simplerMCP4725.git
