@@ -13,7 +13,7 @@
 #include "Fonts/Targ56.h"
 #include "Fonts/FreeSans18pt7b.h"
 #include "Fonts/FreeSans9pt7b.h"
-#include "myMCP4725.h"
+#include "simpler_MCP4725.h"
 #include "SoftWire.h"
 #include "Wire.h"
 #include "simpler_INA219.h" // Add dummy comment to make arduino cmake not consider this line

@@ -1,6 +1,6 @@
 [submodule "ILI9341_extended"]
 	path = ILI9341_extended
 	url = git@github.com:mean00/ILI9341_extended.git
-[submodule "simpler4725"]
-	path = simpler4725
-	url = git@github.com:mean00/simpler4725.git
+[submodule "simplerMCP4725"]
+	path = simplerMCP4725
+	url = git@github.com:mean00/simpler4725.git 
