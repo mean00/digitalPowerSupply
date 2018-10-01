@@ -1,0 +1,3 @@
+[submodule "ILI9341_extended"]
+	path = ILI9341_extended
+	url = git@github.com:mean00/ILI9341_extended.git
