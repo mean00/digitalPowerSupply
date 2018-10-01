@@ -15,6 +15,7 @@
 */
 /**************************************************************************/
 #include <Wire.h>
+#include "MapleFreeRTOS1000.h"
 #include "Adafruit_GFX_AS.h" //
 #include "Adafruit_ILI9341_STM.h" //
 #include "myMCP4725.h"

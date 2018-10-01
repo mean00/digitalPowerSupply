@@ -28,6 +28,7 @@ PRINT_SETTINGS(${ARDUINO_DEFAULT_BOARD})
 
 # Where you store your downloaded libs or manually installed
 SET(CUSTOM_LIB_DIR /home/fx/Arduino/libraries)
+SET(MapleFreeRTOS1000_RECURSE True)
 
 link_directories( ${CUSTOM_LIB_DIR})
 #
