@@ -39,7 +39,7 @@ link_directories( ${CUSTOM_LIB_DIR})
 #
 SET(libPrefix ${ARDUINO_DEFAULT_BOARD}_)
 
-SET(ILI ${CMAKE_CURRENT_SOURCE_DIR}/extendedIli9341)
+SET(ILI ${CMAKE_CURRENT_SOURCE_DIR}/ILI9341_extended/)
 
 include_directories(${ILI})
 
