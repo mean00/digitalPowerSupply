@@ -8,7 +8,6 @@
 #include "SPI.h"
 #include "ILI9341_extended.h"
 #include "adc.h"
-#include "myAdc.h"
 #include "Fonts/digitLcd56.h"
 #include "Fonts/Targ56.h"
 #include "Fonts/FreeSans18pt7b.h"
@@ -17,28 +16,44 @@
 #include "SoftWire.h"
 #include "Wire.h"
 #include "simpler_INA219.h" // Add dummy comment to make arduino cmake not consider this line
+#include "MapleFreeRTOS1000.h"
+#include "MapleFreeRTOS1000_pp.h"
+#include "mcp23017.h"
+#include "MCP23017_rtos.h"
 
 // ILI9341 is using HW SPI + those pins
-#define TFT_DC                  PA8 // OK
-#define TFT_RST                 PA9 // OK
-#define TFT_CS                  PA10 // PB10
-#define PIN_POT_VOLTAGE         PB0
-#define PIN_VOLTOUT_VOLTAGE     PB1
-#define VOLTAGE_ADC_I2C_ADR    0x61
-#define MAXCURRENT_ADC_I2C_ADR 0x60
+// HW SPI= pin
+#define TFT_DC                  PA8 
+#define TFT_RST                 PA9 
+#define TFT_CS                  PA10
+//
+#define MCP23017_INTERRUPT_PIN  PA2
+#define MCP23017_RESET_PIN      PA1
+// I2C MAPPING
+// HW I2C = pins
+#define VOLTAGE_ADC_I2C_ADR     0x61
+#define MAXCURRENT_ADC_I2C_ADR  0x60
+#define MCP23017_I2C_ADDR       0x00 // Actual =0x20+0
+#define INA219_I2C_ADDR         0x40
 
 // Our globals
-ILI9341              *tft=NULL;
-myAdc                *potAdc;
-myAdc                *potCurrent;
+
+xMutex              *i2cMutex; // to protect i2c from concurrent accesses
+
+ILI9341             *tft=NULL;
+                                                                                                                                                                                                               
+myMcp23017_rtos     *mcp_rtos;                                                                                                                                                                                        
+myMcpButtonInput    *pushButton;                                                                                                                                                                                     
+myMcpRotaryEncoder  *rotary;     
 
 
+myMCP4725           *dacVoltage;
+myMCP4725           *dacMaxCurrent;
+simpler_INA219      *ina219;
+WireBase            *DAC_I2C;
 
 
-myMCP4725 *dacVoltage;
-myMCP4725 *dacMaxCurrent;
-simpler_INA219 *ina219;
-WireBase *DAC_I2C;
+static void MainTask( void *a );
 
 /*
  */
@@ -60,19 +75,21 @@ void initTft()
     tft->begin();  
     tft->fillScreen(ILI9341_BLACK);
     tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
-    tft->setRotation(1); //3
-    //tft->setFontFamily(&FreeSans9pt7b,&FreeSans18pt7b,&DIGIT_LCD56pt7b); //FreeSans24pt7b);
+    tft->setRotation(1); //3    
     tft->setFontFamily(&FreeSans9pt7b,&FreeSans18pt7b,&Targa56pt7b); //FreeSans24pt7b);
     
     tft->setFontSize(ILI9341::MediumFont);
     tft->fillScreen(ILI9341_RED);
 }
 
-void setup_vcc_sensor() {
+void setup_vcc_sensor() 
+{
     adc_reg_map *regs = ADC1->regs;
     regs->CR2 |= ADC_CR2_TSVREFE;    // enable VREFINT and temp sensor
     regs->SMPR1 =  ADC_SMPR1_SMP17;  // sample rate for VREFINT ADC channel
 }
+
+#define BOOTUP(x,y,str) { tft->setCursor(x,y); tft->myDrawString(str);}
 
 void mySetup() 
 {
@@ -85,52 +102,68 @@ void mySetup()
   
   initTft();   
   Wire;
-#if 0
-  DAC_I2C=new SoftWire(PB6/* SCL */,PB7 /* SDA*/);
-  DAC_I2C->begin();
-#else 
   TwoWire *tw=&Wire;;
   tw->begin();
   DAC_I2C=tw;
-#endif  
+  tft->setFontSize(ILI9341::MediumFont);
   
-  
-  potAdc=new myAdc(PIN_POT_VOLTAGE,1.);
-  potCurrent=new myAdc(PIN_VOLTOUT_VOLTAGE,1.);
+  BOOTUP(10,10,"1-Setup DACs");
   
   dacVoltage=new myMCP4725(*DAC_I2C,VOLTAGE_ADC_I2C_ADR);
   dacVoltage->setVoltage(1100);  // 7v
   dacMaxCurrent =new myMCP4725(*DAC_I2C,MAXCURRENT_ADC_I2C_ADR);;
   dacMaxCurrent->setVoltage(0);  // 3*700/4096= 500 mA
   
-  tft->setFontSize(ILI9341::MediumFont);
+  BOOTUP(10,40,"2-Setup INA");
+        
   
-  ina219=new    simpler_INA219(0x40,100,&Wire);
+  ina219=new    simpler_INA219(INA219_I2C_ADDR,100,&Wire);
+  
+  
+  BOOTUP(10,70,"3-Setup IOs");
+
+    // Reset MCP23017
+  pinMode(MCP23017_RESET_PIN,OUTPUT);
+  digitalWrite(MCP23017_RESET_PIN, LOW); 
+  delay(100);
+  digitalWrite(MCP23017_RESET_PIN, HIGH); 
+ 
+  mcp_rtos=new myMcp23017_rtos(MCP23017_INTERRUPT_PIN,i2cMutex); 
+  pushButton=new myMcpButtonInput(mcp_rtos->mcp(),2); // A2
+  rotary=new myMcpRotaryEncoder(mcp_rtos->mcp(),1,0);      
+  mcp_rtos->start();    
+
+  BOOTUP(10,100,"4-Starting FreeRTOS");
+  
+  // Ok let's go, switch to FreeRTOS
+  xTaskCreate( MainTask, "MainTask", 500, NULL, 10, NULL );
+  vTaskStartScheduler();
+
+  
   
 }
 /**
+ * 
+ * @param 
  */
-
-
-void managePot(myAdc *adc,myMCP4725 *dac, int *lastValue , int pos)
+void MainTask( void *a )
 {
-    char buffer[20];
-    int consign=adc->getRawValue(); //0...4096
-    consign=(consign+10)/20;
-    consign*=20;
-    // Round up to the closest 20
-    if(abs(consign-*lastValue)>20 || *lastValue==-1)
+      
+    while(1)
     {
-        *lastValue=consign;
-        dac->setVoltage(consign);
-        sprintf(buffer,"%03d",consign);
-#if 0        
-        tft->setCursor(20, pos);  
-        tft->myDrawString(buffer,280);
-#endif
+        digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+        xDelay( 150);
+        digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+        xDelay( 150);        
     }
 }
 
+void myLoop(void) 
+{
+    
+}
+
+#if 0
 void myLoop(void) 
 {
     char buffer[50];
@@ -169,4 +202,5 @@ void myLoop(void)
     delay(100);
 
 }
+#endif
 //-

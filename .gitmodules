@@ -10,3 +10,6 @@
 [submodule "MapleFreeRTOS1000"]
 	path = MapleFreeRTOS1000
 	url = git@github.com:mean00/MapleFreeRTOS1000.git
+[submodule "mcp23017"]
+	path = mcp23017
+	url = git@github.com:mean00/mcp23017.git
