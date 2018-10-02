@@ -7,3 +7,6 @@
 [submodule "simpler_INA219"]
 	path = simpler_INA219
 	url = git@github.com:mean00/simpler_INA219.git
+[submodule "MapleFreeRTOS1000"]
+	path = MapleFreeRTOS1000
+	url = git@github.com:mean00/MapleFreeRTOS1000.git
