@@ -56,7 +56,7 @@ SET(MCP23017_FREERTOS ${CMAKE_CURRENT_SOURCE_DIR}/mcp23017/example/FreeRtos)
 include_directories(${MCP23017_FREERTOS})
 generate_arduino_firmware(I2cPower 
                 SKETCH i2cPowerSupply.ino
-                SRCS   ${ILI}/ILI9341_extended.cpp ${ILI}/ILI9341_extended_glyph.cpp myCode.cpp myAdc.cpp simplerMCP4725/simplerMCP4725.cpp ${MCP23017_FREERTOS}/MCP23017_rtos.cpp
+                SRCS   ${ILI}/ILI9341_extended.cpp ${ILI}/ILI9341_extended_glyph.cpp myCode.cpp  simplerMCP4725/simplerMCP4725.cpp ${MCP23017_FREERTOS}/MCP23017_rtos.cpp 
                 PORT ${ARDUINO_DEFAULT_PORT}
                 BOARD_CPU ${ARDUINO_CPU}
                 )

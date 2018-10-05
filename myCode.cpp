@@ -20,6 +20,7 @@
 #include "MapleFreeRTOS1000_pp.h"
 #include "mcp23017.h"
 #include "MCP23017_rtos.h"
+#include "dacRotaryControl.h"
 
 // ILI9341 is using HW SPI + those pins
 // HW SPI= pin                  PA5/PA6/PA7
@@ -44,8 +45,10 @@ xMutex              *i2cMutex; // to protect i2c from concurrent accesses
 ILI9341             *tft=NULL;
                                                                                                                                                                                                                
 myMcp23017_rtos     *mcp_rtos;                                                                                                                                                                                        
-myMcpButtonInput    *pushButton;                                                                                                                                                                                     
-myMcpRotaryEncoder  *rotary;     
+
+
+dacRotary           *rotaryVoltage;
+
 
 
 myMCP4725           *dacVoltage;
@@ -132,8 +135,11 @@ void mySetup()
   
   i2cMutex=new xMutex();
   mcp_rtos=new myMcp23017_rtos(MCP23017_INTERRUPT_PIN,i2cMutex); 
-  pushButton=new myMcpButtonInput(mcp_rtos->mcp(),2); // A2
-  rotary=new myMcpRotaryEncoder(mcp_rtos->mcp(),1,0);      
+  
+  rotaryVoltage=new   dacRotary(mcp_rtos,1000,25000,100,1000, 
+                                1,0,
+                                2,i2cMutex);
+  
   mcp_rtos->start();    
 
   BOOTUP(10,100,"4-Starting FreeRTOS");
@@ -166,7 +172,9 @@ void MainTask( void *a )
         int voltageMV=(int)(1000.*ina219->getBusVoltage_V());
         i2cMutex->unlock();
         
-        value+=rotary->count();
+        
+        rotaryVoltage->run();
+        value=rotaryVoltage->getValue();
         
         // Display
         tft->setCursor(10,20);
