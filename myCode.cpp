@@ -22,7 +22,7 @@
 #include "MCP23017_rtos.h"
 
 // ILI9341 is using HW SPI + those pins
-// HW SPI= pin
+// HW SPI= pin                  PA5/PA6/PA7
 #define TFT_DC                  PA8 
 #define TFT_RST                 PA9 
 #define TFT_CS                  PA10
@@ -30,7 +30,8 @@
 #define MCP23017_INTERRUPT_PIN  PA2
 #define MCP23017_RESET_PIN      PA1
 // I2C MAPPING
-// HW I2C = pins
+// HW I2C = pins PB6/PB7
+
 #define VOLTAGE_ADC_I2C_ADR     0x61
 #define MAXCURRENT_ADC_I2C_ADR  0x60
 #define MCP23017_I2C_ADDR       0x00 // Actual =0x20+0
@@ -128,6 +129,8 @@ void mySetup()
   delay(100);
   digitalWrite(MCP23017_RESET_PIN, HIGH); 
  
+  
+  i2cMutex=new xMutex();
   mcp_rtos=new myMcp23017_rtos(MCP23017_INTERRUPT_PIN,i2cMutex); 
   pushButton=new myMcpButtonInput(mcp_rtos->mcp(),2); // A2
   rotary=new myMcpRotaryEncoder(mcp_rtos->mcp(),1,0);      
@@ -148,10 +151,32 @@ void mySetup()
  */
 void MainTask( void *a )
 {
-      
+    xDelay( 5);//yield
+    tft->fillScreen(ILI9341_BLACK);
+    tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
+    char buffer[64];
+    int value=0;
     while(1)
     {
         digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+        
+        // Grab INA219 Stuff
+        i2cMutex->lock();
+        int currentMA=ina219->getCurrent_mA();
+        int voltageMV=(int)(1000.*ina219->getBusVoltage_V());
+        i2cMutex->unlock();
+        
+        value+=rotary->count();
+        
+        // Display
+        tft->setCursor(10,20);
+        sprintf(buffer,"Volt : %d mv\n",voltageMV);
+        tft->myDrawString(buffer,280);
+
+        tft->setCursor(10,50);
+        sprintf(buffer,"Counter : %d \n",value);
+        tft->myDrawString(buffer,280);
+
         xDelay( 150);
         digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
         xDelay( 150);        
