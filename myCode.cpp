@@ -22,6 +22,8 @@
 #include "MCP23017_rtos.h"
 #include "dacRotaryControl.h"
 
+#define DCDC_ENABLE_PIN         PB9
+
 // ILI9341 is using HW SPI + those pins
 // HW SPI= pin                  PA5/PA6/PA7
 #define TFT_DC                  PA8 
@@ -99,6 +101,9 @@ void mySetup()
 {
   Serial.println("Init"); 
   
+  pinMode(DCDC_ENABLE_PIN, OUTPUT); // disable DCDC
+  digitalWrite(DCDC_ENABLE_PIN, LOW); 
+  
   SPI.begin();
   SPI.setBitOrder(MSBFIRST); // Set the SPI bit order
   SPI.setDataMode(SPI_MODE0); //Set the  SPI data mode 0
@@ -110,7 +115,7 @@ void mySetup()
   tw->begin();
   DAC_I2C=tw;
   tft->setFontSize(ILI9341::MediumFont);
-  
+#if 1  
   BOOTUP(10,10,"1-Setup DACs");
   
   dacVoltage=new myMCP4725(*DAC_I2C,VOLTAGE_ADC_I2C_ADR);
@@ -123,7 +128,7 @@ void mySetup()
   
   ina219=new    simpler_INA219(INA219_I2C_ADDR,100,&Wire);
   
-  
+#endif  
   BOOTUP(10,70,"3-Setup IOs");
 
     // Reset MCP23017
@@ -151,6 +156,19 @@ void mySetup()
   
   
 }
+int mV2command(int v)
+{
+    if(v<3300) v=3300;
+    if(v>22000) v=22000;
+    float f=v;
+    
+    f-=3250;
+    f*=107;
+    f/=1000;
+    
+    return f;
+    
+}
 /**
  * 
  * @param 
@@ -162,6 +180,10 @@ void MainTask( void *a )
     tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
     char buffer[64];
     int value=0;
+    
+    // unlock DC/DC
+    digitalWrite(DCDC_ENABLE_PIN, HIGH); 
+     
     while(1)
     {
         digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
@@ -174,7 +196,15 @@ void MainTask( void *a )
         
         
         rotaryVoltage->run();
-        value=rotaryVoltage->getValue();
+        int nvalue=rotaryVoltage->getValue();
+        
+        if(value!=nvalue)
+        {
+            int cmd=mV2command(nvalue); // 0..30000
+            dacVoltage->setVoltage(cmd);
+        }
+        
+        value=nvalue;
         
         // Display
         tft->setCursor(10,20);
@@ -195,45 +225,4 @@ void myLoop(void)
 {
     
 }
-
-#if 0
-void myLoop(void) 
-{
-    char buffer[50];
-#if 0
-    static int lastConsignVoltage=-1;
-    
-    managePot(potAdc,dacVoltage,&lastConsignVoltage,20);
-    static int lastConsignCurrent=-1;
-    
-    managePot(potCurrent,dacMaxCurrent,&lastConsignCurrent,20+50);
-    
-    float myLim=(float)lastConsignCurrent;
-    myLim*=1.1;
-    myLim+=60;
-      
-    
-    int mil=floor(myLim);
-    sprintf(buffer,"I:%04d mA",mil);    
-#endif    
-    int ma=ina219->getCurrent_mA();
-    float mv=ina219->getBusVoltage_V();
-    
-    sprintf(buffer,"INA V=%2.2f",mv);
-    tft->setCursor(20, 150);  
-    tft->myDrawString(buffer,280);
-
-    sprintf(buffer,"INA I=%d",ma);
-    tft->setCursor(20,180);  
-    tft->myDrawString(buffer,280);
-
-    
-#if 0
-    tft->setCursor(20, 20+50+50);  
-    tft->myDrawString(buffer,280);
-#endif
-    delay(100);
-
-}
-#endif
 //-
