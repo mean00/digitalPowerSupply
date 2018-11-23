@@ -209,7 +209,7 @@ int mV2command(int v)
  */
 int amp2command(int ma)
 {
-    if(ma<0) ma=0;
+    if(ma<100) ma=100;
     if(ma>3500) ma=3500;
     float f=ma;
     
@@ -239,7 +239,11 @@ void MainTask( void *a )
     rotaryVoltage->setValue(value);
     dacVoltage->setVoltage(mV2command(value));
     int ping=0;
+    
     int maxCurrent=2048;
+    rotaryAmp->setValue(maxCurrent);
+    dacMaxCurrent->setVoltage(mV2command(maxCurrent));
+    
     // unlock DC/DC
     delay(100);
     digitalWrite(DCDC_ENABLE_PIN, HIGH); 
@@ -266,28 +270,26 @@ void MainTask( void *a )
         {
             float v= adcVoltage->getValue();
             tft->setCursor(10,10);
-            sprintf(buffer,"ADCV:%02.2f v",v);
+            sprintf(buffer,"V%02.2f",v);
+            tft->setFontSize(ILI9341::BigFont);
             tft->myDrawString(buffer,280);
+            tft->setFontSize(ILI9341::MediumFont);
 
         }
         {
             float a=adcAmps->getRawValue();
             tft->setCursor(10,1+STEP*3);
-            sprintf(buffer,"AA:%02.2f",a);
+            sprintf(buffer,"mA%05d",(int)a);
             tft->myDrawString(buffer,280);
         
         }
         if(value!=nvalue)
         {
-            
-            
-  
-            
             int cmd=mV2command(nvalue); // 0..30000
             dacVoltage->setVoltage(cmd);
             value=nvalue;
             
-            tft->setCursor(10,10+STEP);
+            tft->setCursor(10,10+4*STEP);
             sprintf(buffer,"V(mv):%d:%d",value,cmd);
             tft->myDrawString(buffer,280);
 
@@ -305,7 +307,7 @@ void MainTask( void *a )
             
             dacMaxCurrent->setVoltage(currentCommand);
         
-            tft->setCursor(10,10+STEP*4);
+            tft->setCursor(10,10+STEP*5);
             sprintf(buffer,"A :%d:%d \n",current,currentCommand);
             tft->myDrawString(buffer,280);
             
