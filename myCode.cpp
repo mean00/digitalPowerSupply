@@ -21,7 +21,7 @@
 #include "mcp23017.h"
 #include "MCP23017_rtos.h"
 #include "dacRotaryControl.h"
-#include "adc.h"
+#include "myAdc/myAdc.h"
 
 
 #define DCDC_ENABLE_PIN         PB4
@@ -62,21 +62,8 @@ WireBase            *DAC_I2C;
 
 
 static void MainTask( void *a );
-static void myAdc_calibrate(void);
-#define HAS_TFT 1
 
-class myAdc
-{
-public:
-              myAdc(int pin,float scaler);
-        float getValue();
-        int   getRawValue();
-  
-protected:
-        adc_dev *_device;
-        int     _channel;
-        float   _scaler;
-};
+#define HAS_TFT 1
 
 myAdc *adcVoltage,*adcAmps;
 /*
@@ -187,11 +174,11 @@ void mySetup()
   
   mcp_rtos->start();    
   BOOTUP(10,100,"4-Starting ADCs");  
-  myAdc_calibrate();
-  
-  BOOTUP(10,130,"5-Starting FreeRTOS");
   adcVoltage=new myAdc(PA2,11.1);
   adcAmps=new myAdc(PA3,1.0);
+
+  
+  BOOTUP(10,130,"5-Starting FreeRTOS");
   
   // Ok let's go, switch to FreeRTOS
   xTaskCreate( MainTask, "MainTask", 500, NULL, 10, NULL );
@@ -342,69 +329,5 @@ void myLoop(void)
     
 }
 
-static float ad_voltage_cal=1;
-static bool calibrated=false;
-
-/**
-+ */
-myAdc::myAdc(int pin, float scaler)
-{
-    if(!calibrated)
-    {
-        calibrated=true;
-        myAdc_calibrate();
-    }
-    pinMode(pin,INPUT_ANALOG);
-    _device=PIN_MAP[pin].adc_device;
-    _channel=PIN_MAP[pin].adc_channel;
-    _scaler=scaler;
-    adc_set_sample_rate(_device,ADC_SMPR_239_5); // slow is fine :)
-    adc_calibrate(_device); // called multiple time potentially, does not matter
-}
-/**
-+ * 
-+ * @return 
-+ */
-#define NB 4
-float myAdc::getValue()
-{
-    float v,sum=0;
-   for(int i=0;i<NB;i++)
-    {
-        
-        //   v = (float)analogRead(PIN_ADC_VOLTAGE);
-        v=(float) adc_read(_device,_channel);
-       sum+=v;
-    }
-    v=sum/NB;
-    v=floor(((v*ad_voltage_cal)/4095.)*_scaler*1000.);
-    v=(v)/1000.;
-    return v;
-}
-
-int   myAdc::getRawValue()
-{
-    int v,sum=0;
-    for(int i=0;i<NB;i++)
-    {
-        
-        //   v = (float)analogRead(PIN_ADC_VOLTAGE);
-        v= adc_read(_device,_channel);
-        sum+=v;
-    }
-    v=sum/NB;
-    return v;
-}
-/**
-+ * \fn probe for VCC used for scale
-+ */
-void myAdc_calibrate()
-{
-    adc_reg_map *regs = ADC1->regs;
-    regs->CR2 |= ADC_CR2_TSVREFE;    // enable VREFINT and temp sensor
-    regs->SMPR1 =  ADC_SMPR1_SMP17;  // sample rate for VREFINT ADC channel
-    ad_voltage_cal = 1.  / (float)adc_read( ADC1, 17);
-    ad_voltage_cal=1200.*4.095*ad_voltage_cal;
-}
 
 //-
