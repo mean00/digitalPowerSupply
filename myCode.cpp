@@ -21,17 +21,19 @@
 #include "mcp23017.h"
 #include "MCP23017_rtos.h"
 #include "dacRotaryControl.h"
+#include "adc.h"
 
-#define DCDC_ENABLE_PIN         PB9
+
+#define DCDC_ENABLE_PIN         PB4
 
 // ILI9341 is using HW SPI + those pins
 // HW SPI= pin                  PA5/PA6/PA7
-#define TFT_DC                  PA8 
-#define TFT_RST                 PA9 
-#define TFT_CS                  PA10
+#define TFT_DC                  PB0
+#define TFT_RST                 PB1 
+#define TFT_CS                  PB10
 //
-#define MCP23017_INTERRUPT_PIN  PA2
-#define MCP23017_RESET_PIN      PA1
+#define MCP23017_INTERRUPT_PIN  PC15
+#define PERIPHERALS_RESET_PIN   PA0
 // I2C MAPPING
 // HW I2C = pins PB6/PB7
 
@@ -39,6 +41,9 @@
 #define MAXCURRENT_ADC_I2C_ADR  0x60
 #define MCP23017_I2C_ADDR       0x00 // Actual =0x20+0
 #define INA219_I2C_ADDR         0x40
+
+
+// ADC IN : A2, A3
 
 // Our globals
 
@@ -48,11 +53,8 @@ ILI9341             *tft=NULL;
                                                                                                                                                                                                                
 myMcp23017_rtos     *mcp_rtos;                                                                                                                                                                                        
 
-
 dacRotary           *rotaryVoltage;
-
-
-
+dacRotary           *rotaryAmp;
 myMCP4725           *dacVoltage;
 myMCP4725           *dacMaxCurrent;
 simpler_INA219      *ina219;
@@ -60,10 +62,26 @@ WireBase            *DAC_I2C;
 
 
 static void MainTask( void *a );
+static void myAdc_calibrate(void);
+#define HAS_TFT 1
 
+class myAdc
+{
+public:
+              myAdc(int pin,float scaler);
+        float getValue();
+        int   getRawValue();
+  
+protected:
+        adc_dev *_device;
+        int     _channel;
+        float   _scaler;
+};
+
+myAdc *adcVoltage,*adcAmps;
 /*
  */
-
+#if HAS_TFT
 void initTft()
 {
     if(tft)
@@ -81,22 +99,30 @@ void initTft()
     tft->begin();  
     tft->fillScreen(ILI9341_BLACK);
     tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
-    tft->setRotation(1); //3    
+    tft->setRotation(1); //1--3    
     tft->setFontFamily(&FreeSans9pt7b,&FreeSans18pt7b,&Targa56pt7b); //FreeSans24pt7b);
     
     tft->setFontSize(ILI9341::MediumFont);
     tft->fillScreen(ILI9341_RED);
 }
-
+#endif
+/**
+ * 
+ */
 void setup_vcc_sensor() 
 {
     adc_reg_map *regs = ADC1->regs;
     regs->CR2 |= ADC_CR2_TSVREFE;    // enable VREFINT and temp sensor
     regs->SMPR1 =  ADC_SMPR1_SMP17;  // sample rate for VREFINT ADC channel
 }
-
+#if HAS_TFT
 #define BOOTUP(x,y,str) { tft->setCursor(x,y); tft->myDrawString(str);}
-
+#else
+#define BOOTUP(...) {}
+#endif
+/**
+ * 
+ */
 void mySetup() 
 {
   Serial.println("Init"); 
@@ -104,18 +130,30 @@ void mySetup()
   pinMode(DCDC_ENABLE_PIN, OUTPUT); // disable DCDC
   digitalWrite(DCDC_ENABLE_PIN, LOW); 
   
+  pinMode(PERIPHERALS_RESET_PIN,OUTPUT);
+  digitalWrite(PERIPHERALS_RESET_PIN, LOW); 
+    // Reset MCP23017 & friends
+  delay(10);
+  digitalWrite(PERIPHERALS_RESET_PIN, HIGH); 
+  delay(10);
+
+  
+  
   SPI.begin();
   SPI.setBitOrder(MSBFIRST); // Set the SPI bit order
   SPI.setDataMode(SPI_MODE0); //Set the  SPI data mode 0
-  SPI.setClockDivider (SPI_CLOCK_DIV4); // Given for 10 Mhz...
-  
+  SPI.setClockDivider (SPI_CLOCK_DIV32); // Given for 10 Mhz... SPI_CLOCK_DIV4
+#if HAS_TFT  
   initTft();   
+#endif
   Wire;
   TwoWire *tw=&Wire;;
   tw->begin();
   DAC_I2C=tw;
+#if HAS_TFT
   tft->setFontSize(ILI9341::MediumFont);
-#if 1  
+#endif
+
   BOOTUP(10,10,"1-Setup DACs");
   
   dacVoltage=new myMCP4725(*DAC_I2C,VOLTAGE_ADC_I2C_ADR);
@@ -125,50 +163,77 @@ void mySetup()
   
   BOOTUP(10,40,"2-Setup INA");
         
-  
-  ina219=new    simpler_INA219(INA219_I2C_ADDR,100,&Wire);
-  
+#if 0    
+  ina219=new    simpler_INA219(INA219_I2C_ADDR,100,&Wire);  
 #endif  
+  
   BOOTUP(10,70,"3-Setup IOs");
 
-    // Reset MCP23017
-  pinMode(MCP23017_RESET_PIN,OUTPUT);
-  digitalWrite(MCP23017_RESET_PIN, LOW); 
-  delay(100);
-  digitalWrite(MCP23017_RESET_PIN, HIGH); 
- 
   
   i2cMutex=new xMutex();
   mcp_rtos=new myMcp23017_rtos(MCP23017_INTERRUPT_PIN,i2cMutex); 
   
-  rotaryVoltage=new   dacRotary(mcp_rtos,1000,25000,100,1000, 
-                                1,0,
-                                2,i2cMutex);
+  rotaryVoltage=new   dacRotary(mcp_rtos,4000,28000,100,1000, 
+                                0,1, // up down
+                                2, // button
+                                i2cMutex);
+  
+  rotaryAmp = new  dacRotary(mcp_rtos,
+                                0,4096, // min max
+                                10,100,  // steps
+                                3,4, // up down
+                                5, // button
+                                i2cMutex);
   
   mcp_rtos->start();    
-
-  BOOTUP(10,100,"4-Starting FreeRTOS");
+  BOOTUP(10,100,"4-Starting ADCs");  
+  myAdc_calibrate();
+  
+  BOOTUP(10,130,"5-Starting FreeRTOS");
+  adcVoltage=new myAdc(PA2,11.1);
+  adcAmps=new myAdc(PA3,1.0);
   
   // Ok let's go, switch to FreeRTOS
   xTaskCreate( MainTask, "MainTask", 500, NULL, 10, NULL );
-  vTaskStartScheduler();
-
-  
-  
+  vTaskStartScheduler();  
 }
+/**
+ * 
+ * @param v
+ * @return 
+ */
 int mV2command(int v)
 {
-    if(v<3300) v=3300;
-    if(v>22000) v=22000;
+    if(v<4000) v=4000;
+    if(v>28000) v=28000;
     float f=v;
     
-    f-=3250;
-    f*=107;
-    f/=1000;
+    f-=1475;    
+    f/=9.75;
     
-    return f;
+    return (int)(f+0.45);
     
 }
+
+/**
+ * 
+ * @param v
+ * @return 
+ */
+int amp2command(int ma)
+{
+    if(ma<0) ma=0;
+    if(ma>3500) ma=3500;
+    float f=ma;
+    
+    f-=100;    
+    f/=1.1;
+    
+    return (int)(f+0.45);
+    
+}
+
+
 /**
  * 
  * @param 
@@ -176,53 +241,170 @@ int mV2command(int v)
 void MainTask( void *a )
 {
     xDelay( 5);//yield
+#if HAS_TFT    
     tft->fillScreen(ILI9341_BLACK);
     tft->setTextColor(ILI9341_WHITE,ILI9341_BLACK);  
+#endif
     char buffer[64];
-    int value=0;
     
+    
+    int value=5000; // 5v
+    rotaryVoltage->setValue(value);
+    dacVoltage->setVoltage(mV2command(value));
+    int ping=0;
+    int maxCurrent=2048;
     // unlock DC/DC
+    delay(100);
     digitalWrite(DCDC_ENABLE_PIN, HIGH); 
-     
+    delay(100);
     while(1)
     {
-        digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+        
         
         // Grab INA219 Stuff
+#if 0
         i2cMutex->lock();
         int currentMA=ina219->getCurrent_mA();
         int voltageMV=(int)(1000.*ina219->getBusVoltage_V());
         i2cMutex->unlock();
+#endif   
         
+#define STEP 40     
+        
+        // Voltage
         
         rotaryVoltage->run();
         int nvalue=rotaryVoltage->getValue();
         
+        {
+            float v= adcVoltage->getValue();
+            tft->setCursor(10,10);
+            sprintf(buffer,"ADCV:%02.2f v",v);
+            tft->myDrawString(buffer,280);
+
+        }
+        {
+            float a=adcAmps->getRawValue();
+            tft->setCursor(10,1+STEP*3);
+            sprintf(buffer,"AA:%02.2f",a);
+            tft->myDrawString(buffer,280);
+        
+        }
         if(value!=nvalue)
         {
+            
+            
+  
+            
             int cmd=mV2command(nvalue); // 0..30000
             dacVoltage->setVoltage(cmd);
+            value=nvalue;
+            
+            tft->setCursor(10,10+STEP);
+            sprintf(buffer,"V(mv):%d:%d",value,cmd);
+            tft->myDrawString(buffer,280);
+
         }
         
-        value=nvalue;
+        // current
         
-        // Display
-        tft->setCursor(10,20);
-        sprintf(buffer,"Volt : %d mv\n",voltageMV);
-        tft->myDrawString(buffer,280);
+        rotaryAmp->run();
+        int current=rotaryAmp->getValue();
+        if(current!=maxCurrent)
+        {
+            maxCurrent=current;
+            
+            int currentCommand=amp2command(maxCurrent);
+            
+            dacMaxCurrent->setVoltage(currentCommand);
+        
+            tft->setCursor(10,10+STEP*4);
+            sprintf(buffer,"A :%d:%d \n",current,currentCommand);
+            tft->myDrawString(buffer,280);
+            
+        }
+#if HAS_TFT
+        tft->setCursor(200,200);
+        sprintf(buffer," %d ",ping);
+        tft->myDrawString(buffer,200);
+        ping++;
+#endif        
 
-        tft->setCursor(10,50);
-        sprintf(buffer,"Counter : %d \n",value);
-        tft->myDrawString(buffer,280);
-
-        xDelay( 150);
-        digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-        xDelay( 150);        
+        xDelay( 200);
+        
     }
 }
-
+/**
+ * 
+ */
 void myLoop(void) 
 {
     
 }
+
+static float ad_voltage_cal=1;
+static bool calibrated=false;
+
+/**
++ */
+myAdc::myAdc(int pin, float scaler)
+{
+    if(!calibrated)
+    {
+        calibrated=true;
+        myAdc_calibrate();
+    }
+    pinMode(pin,INPUT_ANALOG);
+    _device=PIN_MAP[pin].adc_device;
+    _channel=PIN_MAP[pin].adc_channel;
+    _scaler=scaler;
+    adc_set_sample_rate(_device,ADC_SMPR_239_5); // slow is fine :)
+    adc_calibrate(_device); // called multiple time potentially, does not matter
+}
+/**
++ * 
++ * @return 
++ */
+#define NB 4
+float myAdc::getValue()
+{
+    float v,sum=0;
+   for(int i=0;i<NB;i++)
+    {
+        
+        //   v = (float)analogRead(PIN_ADC_VOLTAGE);
+        v=(float) adc_read(_device,_channel);
+       sum+=v;
+    }
+    v=sum/NB;
+    v=floor(((v*ad_voltage_cal)/4095.)*_scaler*1000.);
+    v=(v)/1000.;
+    return v;
+}
+
+int   myAdc::getRawValue()
+{
+    int v,sum=0;
+    for(int i=0;i<NB;i++)
+    {
+        
+        //   v = (float)analogRead(PIN_ADC_VOLTAGE);
+        v= adc_read(_device,_channel);
+        sum+=v;
+    }
+    v=sum/NB;
+    return v;
+}
+/**
++ * \fn probe for VCC used for scale
++ */
+void myAdc_calibrate()
+{
+    adc_reg_map *regs = ADC1->regs;
+    regs->CR2 |= ADC_CR2_TSVREFE;    // enable VREFINT and temp sensor
+    regs->SMPR1 =  ADC_SMPR1_SMP17;  // sample rate for VREFINT ADC channel
+    ad_voltage_cal = 1.  / (float)adc_read( ADC1, 17);
+    ad_voltage_cal=1200.*4.095*ad_voltage_cal;
+}
+
 //-
